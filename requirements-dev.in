@@ -1,0 +1,4 @@
+-c requirements.txt
+pytest
+# pytest needs colorama on Windows; listed so the hash-locked file works on every OS
+colorama

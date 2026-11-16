@@ -1,0 +1,21 @@
+# Secrets: never commit
+.env
+.env.*
+!.env.example
+*.key
+secrets*.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Local test databases (the real one is data/prices.db)
+*.db
+!data/prices.db
+*.db-journal
+
+.DS_Store

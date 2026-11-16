@@ -1,0 +1,12 @@
+[project]
+name = "gold-alert-agent"
+version = "1.0.0"
+description = "Agentic AI bot that watches official IBJA gold rates and sends WhatsApp alerts when the price drops."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["requests", "beautifulsoup4", "PyYAML", "openai", "tzdata"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+addopts = "-q"

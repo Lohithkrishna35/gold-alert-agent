@@ -1,0 +1,6 @@
+requests
+beautifulsoup4
+PyYAML
+openai
+# Windows has no built-in time zone database; zoneinfo needs this for Asia/Kolkata
+tzdata

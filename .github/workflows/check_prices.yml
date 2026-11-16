@@ -1,0 +1,70 @@
+name: Check gold price
+
+on:
+  schedule:
+    # Times are UTC, Mon-Fri only.
+    # 04:00 UTC = 9:30 AM IST (early hint from the global price)
+    # 06:50 UTC = 12:20 PM IST (after the IBJA AM rate), 11:50 UTC = 5:20 PM IST (after the IBJA PM rate)
+    - cron: "0 4 * * 1-5"
+    - cron: "50 6 * * 1-5"
+    - cron: "50 11 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run = normal check, dry-run = print only, test-message = test note to admin"
+        default: run
+        type: choice
+        options: [run, dry-run, test-message]
+
+# Never run two checks at the same time (avoids double alerts)
+concurrency:
+  group: gold-check
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write   # only to save the updated price history (data/prices.db)
+    steps:
+      # TODO(Phase 4): replace version tags with full commit SHAs
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pinned dependencies (hash-checked)
+        run: pip install --require-hashes -r requirements.txt
+
+      - name: Run the gold check
+        env:
+          PYTHONPATH: src
+          ADMIN_CONTACT: ${{ secrets.ADMIN_CONTACT }}
+          FAMILY_CONTACTS: ${{ secrets.FAMILY_CONTACTS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          API_NINJAS_KEY: ${{ secrets.API_NINJAS_KEY }}
+          MODE: ${{ github.event.inputs.mode || 'run' }}
+        run: |
+          case "$MODE" in
+            dry-run)      python -m goldbot --dry-run ;;
+            test-message) python -m goldbot --test-message ;;
+            *)            python -m goldbot ;;
+          esac
+
+      - name: Save price history
+        if: always() && (github.event.inputs.mode || 'run') == 'run'
+        run: |
+          git config user.name "gold-bot"
+          git config user.email "gold-bot@users.noreply.github.com"
+          git add data/prices.db
+          git diff --cached --quiet || git commit -m "Update gold price history [skip ci]"
+          git push

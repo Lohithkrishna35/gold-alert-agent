@@ -1,0 +1,99 @@
+# Gold Price Drop Alert Agent - settings
+# No secrets here. Keys and phone numbers live only in GitHub Secrets / your local .env file.
+
+timezone: Asia/Kolkata
+
+source:
+  # Official IBJA benchmark rates (India Bullion and Jewellers Association)
+  ibja_url: https://ibjarates.com/
+  user_agent: "gold-alert-agent/1.0 (personal, non-commercial; twice-daily read)"
+  timeout_seconds: 20
+  # Network errors: quick retries with growing waits (seconds)
+  network_retry_waits: [10, 30, 60]
+  # Rate not published yet: wait this many minutes between tries
+  not_published_wait_minutes: 15
+  not_published_max_tries: 3
+
+# IBJA publishes nothing on weekends and these holidays (from IBJA's yearly holiday list).
+# Format: YYYY-MM-DD. Update once a year from https://ibjarates.com (List of Holidays PDF).
+holidays: []
+
+rules:
+  daily_drop_pct: 1.0          # alert if 22K falls this % or more vs the previous IBJA rate
+  low_window_days: 30          # "lowest in N days" trigger
+  below_high_pct: 3.0          # alert if 22K is this % or more below the highest rate of the window
+  min_history_points: 10       # need at least this many past rates before the 30-day triggers can fire
+  second_alert_extra_pct: 1.0  # a second alert the same day needs a further fall of this %
+  bad_data_move_pct: 5.0       # a move bigger than this in one step is treated as bad data
+
+cross_check:
+  enabled: true
+  # Free tier gives the last completed daily settlement (COMEX gold), in INR per gram.
+  provider: api_ninjas
+  url: https://api.api-ninjas.com/v1/goldprice
+  # If IBJA's move and the global move differ by more than this many percentage points, hold the alert.
+  max_disagreement_pp: 2.0
+
+morning_hint:
+  # 9:30 AM (Mon-Fri): if global gold fell this much in its latest session (in rupees), send an early hint.
+  # Uses the global price only (not official). The confirmed IBJA alert still follows at 12:20 PM.
+  enabled: true
+  min_global_drop_pct: 1.0
+  send_to_family: true
+  # Ignore global data older than this (e.g. the provider stopped updating)
+  max_age_hours: 96
+
+agent:
+  enabled: true
+  max_tool_calls: 5
+  timeout_seconds: 45
+  temperature: 0
+  # Tried in order. If one fails or is rate-limited, the next is used. If all fail, a template message is sent.
+  # Groq first: fast and well within its free limits. Gemini's free tier allows only a few calls a minute.
+  providers:
+    - name: groq
+      base_url: https://api.groq.com/openai/v1
+      model: openai/gpt-oss-120b
+      api_key_env: GROQ_API_KEY
+      extra:
+        reasoning_effort: low
+    - name: gemini
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+      model: gemini-3.8-flash
+      api_key_env: GEMINI_API_KEY
+      # Gemini 3 models work best at their default temperature; keep their thinking short for speed
+      temperature: null
+      extra:
+        reasoning_effort: low
+
+messages:
+  # Phrases the alert must never contain (case-insensitive)
+  banned_phrases:
+    - buy now
+    - must buy
+    - should buy
+    - guaranteed
+    - sell now
+    - invest now
+    - best time to buy
+  max_length: 900
+
+notifier:
+  # Channel used when a contact does not say "channel" itself: callmebot | whatabot | telegram
+  # Each contact can pick its own, e.g. you on telegram and family on WhatsApp.
+  default_channel: callmebot
+  callmebot:
+    url: https://api.callmebot.com/whatsapp.php
+  whatabot:
+    url: https://api.whatabot.net/whatsapp/sendMessage
+  telegram:
+    api_base: https://api.telegram.org
+    # Optional sticker (animated ones work too) sent just before each drop alert, Telegram only.
+    # Send any sticker to your bot, run --telegram-setup, and paste the file_id it prints here.
+    alert_sticker: ""
+  seconds_between_sends: 5
+  send_retry_waits: [5, 20, 60]
+
+health:
+  # Optional: a short "bot is healthy" note to the admin on Friday evenings
+  weekly_note: true

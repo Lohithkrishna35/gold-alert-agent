@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["data/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest
+      - name: Dry run on the saved IBJA page (no secrets needed)
+        run: PYTHONPATH=src python -m goldbot --dry-run --db /tmp/ci.db --html-file tests/fixtures/ibja_2026-11-16_am.html --now 2026-11-16T12:20
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan for leaked secrets (gitleaks)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo --redact --exit-code 1
